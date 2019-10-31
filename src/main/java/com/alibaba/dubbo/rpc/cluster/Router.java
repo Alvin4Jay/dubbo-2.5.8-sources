@@ -44,7 +44,7 @@ public interface Router extends Comparable<Router> {
      * route.
      *
      * @param invokers
-     * @param url        refer url
+     * @param url        refer url 消费者url
      * @param invocation
      * @return routed invokers
      * @throws RpcException

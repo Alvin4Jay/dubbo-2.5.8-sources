@@ -112,22 +112,26 @@ public class RpcUtils {
     }
 
     public static String getMethodName(Invocation invocation) {
+        // 泛化调用
         if (Constants.$INVOKE.equals(invocation.getMethodName())
                 && invocation.getArguments() != null
                 && invocation.getArguments().length > 0
                 && invocation.getArguments()[0] instanceof String) {
-            return (String) invocation.getArguments()[0];
+            return (String) invocation.getArguments()[0]; // 第一个参数是真正调用的方法
         }
+        // 正常调用
         return invocation.getMethodName();
     }
 
     public static Object[] getArguments(Invocation invocation) {
+        // 泛化调用
         if (Constants.$INVOKE.equals(invocation.getMethodName())
                 && invocation.getArguments() != null
                 && invocation.getArguments().length > 2
                 && invocation.getArguments()[2] instanceof Object[]) {
             return (Object[]) invocation.getArguments()[2];
         }
+        // 正常调用
         return invocation.getArguments();
     }
 

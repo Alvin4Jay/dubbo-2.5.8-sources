@@ -46,6 +46,13 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
 
     private volatile boolean destroyed = false;
 
+    /**
+     * 服务消费者配置
+     * consumer://192.168.0.101/com.alibaba.dubbo.demo.DemoService?application=demo-consumer
+     * &category=providers,configurators,routers,cells&cellinvokemode=sharing&check=false
+     * &dubbo=2.0.0&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello&pid=12220
+     * &side=consumer&timestamp=1551105894429
+     */
     private volatile URL consumerUrl;
 
     private volatile List<Router> routers;

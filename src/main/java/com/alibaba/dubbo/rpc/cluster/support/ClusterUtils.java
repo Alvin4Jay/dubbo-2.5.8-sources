@@ -33,12 +33,12 @@ public class ClusterUtils {
 
     /**
      * 合并消费者端数据
-     * @param remoteUrl 提供者url
+     * @param remoteUrl 提供者url dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-provider&cellinvokemode=sharing&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello&pid=19394&side=provider&timestamp=15511633231
      * @param localMap 消费者端配置数据
      * @return 合并消费者端配置数据之后的提供者url
      */
     public static URL mergeUrl(URL remoteUrl, Map<String, String> localMap) {
-        Map<String, String> map = new HashMap<String, String>();
+        Map<String, String> map = new HashMap<String, String>(); // 最终的提供者端参数
         Map<String, String> remoteMap = remoteUrl.getParameters(); // 原提供者的数据
 
 
@@ -69,7 +69,7 @@ public class ClusterUtils {
         }
 
         if (localMap != null && localMap.size() > 0) {
-            map.putAll(localMap);
+            map.putAll(localMap); // 消费者端数据存入map
         }
         if (remoteMap != null && remoteMap.size() > 0) {
             // 版本号使用提供者的
@@ -91,7 +91,7 @@ public class ClusterUtils {
             }
             // 保留provider的启动timestamp
             String remoteTimestamp = remoteMap.get(Constants.TIMESTAMP_KEY);
-            if (remoteTimestamp != null && remoteTimestamp.length() > 0) {
+            if (remoteTimestamp != null && remoteTimestamp.length() > 0) { // remote.timestamp
                 map.put(Constants.REMOTE_TIMESTAMP_KEY, remoteMap.get(Constants.TIMESTAMP_KEY));
             }
             // 合并filter和listener

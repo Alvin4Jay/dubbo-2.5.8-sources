@@ -46,10 +46,15 @@ public class ConditionRouter implements Router, Comparable<Router> {
 
     private static final Logger logger = LoggerFactory.getLogger(ConditionRouter.class);
     private static Pattern ROUTE_PATTERN = Pattern.compile("([&!=,]*)\\s*([^&!=,\\s]+)");
+    // 条件路由规则url
     private final URL url;
+    // 优先级
     private final int priority;
+    // 当路由结果为空时，是否强制执行，如果不强制执行，路由结果为空的路由规则将自动失效，可不填，缺省为 flase。
     private final boolean force;
+    // 消费者匹配条件
     private final Map<String, MatchPair> whenCondition;
+    // 提供者过滤条件
     private final Map<String, MatchPair> thenCondition;
 
     public ConditionRouter(URL url) {
@@ -59,6 +64,7 @@ public class ConditionRouter implements Router, Comparable<Router> {
         try {
             String rule = url.getParameterAndDecoded(Constants.RULE_KEY);
             if (rule == null || rule.trim().length() == 0) {
+                // 路由规则为空
                 throw new IllegalArgumentException("Illegal route rule!");
             }
             rule = rule.replace("consumer.", "").replace("provider.", "");
@@ -86,6 +92,7 @@ public class ConditionRouter implements Router, Comparable<Router> {
         // 多个Value值
         Set<String> values = null;
         final Matcher matcher = ROUTE_PATTERN.matcher(rule);
+        // 匹配规则表达式
         while (matcher.find()) { // 逐个匹配
             String separator = matcher.group(1);
             String content = matcher.group(2);
@@ -142,12 +149,18 @@ public class ConditionRouter implements Router, Comparable<Router> {
         return condition;
     }
 
-    public <T> List<Invoker<T>> route(List<Invoker<T>> invokers, URL url, Invocation invocation)
-            throws RpcException {
+    /**
+     * 路由
+     * @param invokers
+     * @param url        refer url 消费者url
+     * @param invocation 调用
+     */
+    public <T> List<Invoker<T>> route(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
         if (invokers == null || invokers.size() == 0) {
             return invokers;
         }
         try {
+            // 消费者匹配
             if (!matchWhen(url, invocation)) {
                 return invokers;
             }
@@ -157,6 +170,7 @@ public class ConditionRouter implements Router, Comparable<Router> {
                 return result;
             }
             for (Invoker<T> invoker : invokers) {
+                // 提供者过滤
                 if (matchThen(invoker.getUrl(), url)) {
                     result.add(invoker);
                 }
@@ -174,7 +188,7 @@ public class ConditionRouter implements Router, Comparable<Router> {
     }
 
     public URL getUrl() {
-        return url;
+        return url; // router url
     }
 
     public int compareTo(Router o) {
@@ -185,10 +199,29 @@ public class ConditionRouter implements Router, Comparable<Router> {
         return this.priority == c.priority ? url.toFullString().compareTo(c.url.toFullString()) : (this.priority > c.priority ? 1 : -1);
     }
 
+    /**
+     *
+     * @param url 消费者url consumer://172.16.113.42/com.alibaba.dubbo.demo.DemoService?application=demo-consumer
+     *            &category=providers,configurators,routers&check=false&dubbo=2.0.0&interface=com.alibaba.dubbo.demo.DemoService
+     *            &methods=sayHello&pid=49033&qos.port=33333&side=consumer&timestamp=1557625969102
+     * @param invocation
+     * @return
+     */
     boolean matchWhen(URL url, Invocation invocation) {
         return whenCondition == null || whenCondition.isEmpty() || matchCondition(whenCondition, url, null, invocation);
     }
 
+    /**
+     *
+     * @param url 提供者url dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-consumer
+     *            &check=false&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello
+     *            &pid=49240&qos.port=33333&register.ip=172.16.113.42&remote.timestamp=1557625895270&side=consumer
+     *            &timestamp=1557626930001
+     * @param param 消费者url consumer://172.16.113.42/com.alibaba.dubbo.demo.DemoService?application=demo-consumer
+     *              &category=providers,configurators,routers&check=false&dubbo=2.0.0&interface=com.alibaba.dubbo.demo.DemoService
+     *              &methods=sayHello&pid=49245&qos.port=33333&side=consumer&timestamp=1557626984007
+     * @return
+     */
     private boolean matchThen(URL url, URL param) {
         return !(thenCondition == null || thenCondition.isEmpty()) && matchCondition(thenCondition, url, param, null);
     }

@@ -174,7 +174,8 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                     }
                 }
             };
-            reconnectExecutorFuture = reconnectExecutorService.scheduleWithFixedDelay(connectStatusCheckCommand, reconnect, reconnect, TimeUnit.MILLISECONDS);
+            reconnectExecutorFuture = reconnectExecutorService
+                    .scheduleWithFixedDelay(connectStatusCheckCommand, reconnect, reconnect, TimeUnit.MILLISECONDS);
         }
     }
 

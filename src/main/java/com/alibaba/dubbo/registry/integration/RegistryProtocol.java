@@ -316,7 +316,7 @@ public class RegistryProtocol implements Protocol {
                 Constants.PROVIDERS_CATEGORY
                         + "," + Constants.CONFIGURATORS_CATEGORY
                         + "," + Constants.ROUTERS_CATEGORY));
-
+        // 集群容错
         Invoker invoker = cluster.join(directory);
         ProviderConsumerRegTable.registerConsuemr(invoker, url, subscribeUrl, directory);
         return invoker;

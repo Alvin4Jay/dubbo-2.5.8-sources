@@ -32,16 +32,21 @@ import java.util.List;
  */
 public class MockInvokersSelector implements Router {
 
+    /**
+     * @param invokers
+     * @param url        refer url 消费者url
+     * @param invocation
+     */
     public <T> List<Invoker<T>> route(final List<Invoker<T>> invokers,
                                       URL url, final Invocation invocation) throws RpcException {
         if (invocation.getAttachments() == null) {
-            return getNormalInvokers(invokers);
+            return getNormalInvokers(invokers); //  去除mock协议的invoker，返回
         } else {
             String value = invocation.getAttachments().get(Constants.INVOCATION_NEED_MOCK);
             if (value == null)
                 return getNormalInvokers(invokers);
             else if (Boolean.TRUE.toString().equalsIgnoreCase(value)) {
-                return getMockedInvokers(invokers);
+                return getMockedInvokers(invokers); // 获取mock协议的provider
             }
         }
         return invokers;
@@ -54,7 +59,7 @@ public class MockInvokersSelector implements Router {
         List<Invoker<T>> sInvokers = new ArrayList<Invoker<T>>(1);
         for (Invoker<T> invoker : invokers) {
             if (invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) {
-                sInvokers.add(invoker);
+                sInvokers.add(invoker); // 找出所有mock协议的provider
             }
         }
         return sInvokers;
@@ -62,7 +67,7 @@ public class MockInvokersSelector implements Router {
 
     private <T> List<Invoker<T>> getNormalInvokers(final List<Invoker<T>> invokers) {
         if (!hasMockProviders(invokers)) {
-            return invokers;
+            return invokers; // 没有mock协议的provider，直接返回
         } else {
             List<Invoker<T>> sInvokers = new ArrayList<Invoker<T>>(invokers.size());
             for (Invoker<T> invoker : invokers) {
@@ -70,14 +75,17 @@ public class MockInvokersSelector implements Router {
                     sInvokers.add(invoker);
                 }
             }
-            return sInvokers;
+            return sInvokers; // 去除mock协议的invoker，返回
         }
     }
 
+    /**
+     * 是否有mock协议的提供者
+     */
     private <T> boolean hasMockProviders(final List<Invoker<T>> invokers) {
         boolean hasMockProvider = false;
         for (Invoker<T> invoker : invokers) {
-            if (invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) {
+            if (invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) { // mock协议
                 hasMockProvider = true;
                 break;
             }

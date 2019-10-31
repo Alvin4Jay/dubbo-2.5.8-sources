@@ -42,8 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
 
-    private static final Logger logger = LoggerFactory
-            .getLogger(AbstractClusterInvoker.class);
+    private static final Logger logger = LoggerFactory.getLogger(AbstractClusterInvoker.class);
     protected final Directory<T> directory;
 
     protected final boolean availablecheck;
@@ -95,18 +94,19 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
      * @param availablecheck 如果设置true，在选择的时候先选invoker.available == true
      * @param selected       已选过的invoker.注意：输入保证不重复
      */
-    protected Invoker<T> select(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
+    protected Invoker<T> select(LoadBalance loadbalance, Invocation invocation,
+                                List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
         if (invokers == null || invokers.size() == 0)
             return null;
         String methodName = invocation == null ? "" : invocation.getMethodName();
 
         boolean sticky = invokers.get(0).getUrl().getMethodParameter(methodName, Constants.CLUSTER_STICKY_KEY, Constants.DEFAULT_CLUSTER_STICKY);
         {
-            //ignore overloaded method
+            //ignore overloaded method // doubt sticky什么意思??
             if (stickyInvoker != null && !invokers.contains(stickyInvoker)) {
                 stickyInvoker = null;
             }
-            //ignore cucurrent problem
+            //ignore cucurrent problem // doubt 什么意思??
             if (sticky && stickyInvoker != null && (selected == null || !selected.contains(stickyInvoker))) {
                 if (availablecheck && stickyInvoker.isAvailable()) {
                     return stickyInvoker;
@@ -121,21 +121,24 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         return invoker;
     }
 
-    private Invoker<T> doselect(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
-        if (invokers == null || invokers.size() == 0)
+    private Invoker<T> doselect(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers,
+                                List<Invoker<T>> selected) throws RpcException {
+        if (invokers == null || invokers.size() == 0) // invoker不存在
             return null;
-        if (invokers.size() == 1)
+        if (invokers.size() == 1) // 只有一个
             return invokers.get(0);
-        // 如果只有两个invoker，退化成轮循
+        // 如果只有两个invoker，退化成轮循 从不包含在selected中的invoker中选择
         if (invokers.size() == 2 && selected != null && selected.size() > 0) {
             return selected.get(0) == invokers.get(0) ? invokers.get(1) : invokers.get(0);
         }
+        // getUrl(): zookeeper://.....
         Invoker<T> invoker = loadbalance.select(invokers, getUrl(), invocation);
 
         //如果 selected中包含（优先判断） 或者 不可用&&availablecheck=true 则重试.
         if ((selected != null && selected.contains(invoker))
                 || (!invoker.isAvailable() && getUrl() != null && availablecheck)) {
             try {
+                // 重新选择符合条件的invoker
                 Invoker<T> rinvoker = reselect(loadbalance, invocation, invokers, selected, availablecheck);
                 if (rinvoker != null) {
                     invoker = rinvoker;
@@ -213,19 +216,22 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
     }
 
     public Result invoke(final Invocation invocation) throws RpcException {
-
+        // 检查是否已被销毁
         checkWhetherDestroyed();
-
+        // 负载均衡
         LoadBalance loadbalance;
-
+        // 获取invocation(调用方法)对应的可用的invoker(经过路由router)
         List<Invoker<T>> invokers = list(invocation);
         if (invokers != null && invokers.size() > 0) {
+            // invokers.get(0).getUrl()----合并消费者参数之后的提供者url RandomLoadBalance
             loadbalance = ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(invokers.get(0).getUrl()
                     .getMethodParameter(invocation.getMethodName(), Constants.LOADBALANCE_KEY, Constants.DEFAULT_LOADBALANCE));
         } else {
+            // RandomLoadBalance默认
             loadbalance = ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(Constants.DEFAULT_LOADBALANCE);
         }
         RpcUtils.attachInvocationIdIfAsync(getUrl(), invocation);
+        // 真正的调用
         return doInvoke(invocation, invokers, loadbalance);
     }
 

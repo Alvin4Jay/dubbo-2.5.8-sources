@@ -40,16 +40,29 @@ public class FailfastClusterInvoker<T> extends AbstractClusterInvoker<T> {
         super(directory);
     }
 
+    /**
+     * 调用invoker
+     * @param invocation 调用上下文
+     * @param invokers 匹配的invokers
+     * @param loadbalance 负载均衡策略
+     * @return
+     * @throws RpcException
+     */
     public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
         checkInvokers(invokers, invocation);
+        // 根据负载均衡策略选择invoker
         Invoker<T> invoker = select(loadbalance, invocation, invokers, null);
         try {
             return invoker.invoke(invocation);
         } catch (Throwable e) {
-            if (e instanceof RpcException && ((RpcException) e).isBiz()) { // biz exception.
+            if (e instanceof RpcException && ((RpcException) e).isBiz()) { // biz exception. 业务异常直接抛出
                 throw (RpcException) e;
             }
-            throw new RpcException(e instanceof RpcException ? ((RpcException) e).getCode() : 0, "Failfast invoke providers " + invoker.getUrl() + " " + loadbalance.getClass().getSimpleName() + " select from all providers " + invokers + " for service " + getInterface().getName() + " method " + invocation.getMethodName() + " on consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion() + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e.getCause() != null ? e.getCause() : e);
+            throw new RpcException(e instanceof RpcException ? ((RpcException) e).getCode() : 0, "Failfast invoke providers "
+                    + invoker.getUrl() + " " + loadbalance.getClass().getSimpleName() + " select from all providers "
+                    + invokers + " for service " + getInterface().getName() + " method " + invocation.getMethodName()
+                    + " on consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion()
+                    + ", but no luck to perform the invocation. Last error is: " + e.getMessage(), e.getCause() != null ? e.getCause() : e);
         }
     }
 }

@@ -246,13 +246,14 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                 invokerUrls.addAll(this.cachedInvokerUrls);
             } else {
                 this.cachedInvokerUrls = new HashSet<URL>();
+                // doubt cachedInvokerUrls作用
                 this.cachedInvokerUrls.addAll(invokerUrls);//缓存invokerUrls列表，便于交叉对比
             }
             if (invokerUrls.size() == 0) {
                 return;
             }
             Map<String, Invoker<T>> newUrlInvokerMap = toInvokers(invokerUrls);// 将URL列表转成Invoker列表
-            Map<String, List<Invoker<T>>> newMethodInvokerMap = toMethodInvokers(newUrlInvokerMap); // 换方法名映射Invoker列表
+            Map<String, List<Invoker<T>>> newMethodInvokerMap = toMethodInvokers(newUrlInvokerMap); // 将方法名映射Invoker列表
             // state change
             //如果计算错误，则不进行处理.
             if (newUrlInvokerMap == null || newUrlInvokerMap.size() == 0) {
@@ -270,14 +271,19 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * 多服务分组，invoker集群处理
+     * @param methodMap <code><方法名，List<Invoker>></code>
+     * @return
+     */
     private Map<String, List<Invoker<T>>> toMergeMethodInvokerMap(Map<String, List<Invoker<T>>> methodMap) {
         Map<String, List<Invoker<T>>> result = new HashMap<String, List<Invoker<T>>>();
         for (Map.Entry<String, List<Invoker<T>>> entry : methodMap.entrySet()) {
-            String method = entry.getKey();
-            List<Invoker<T>> invokers = entry.getValue();
-            Map<String, List<Invoker<T>>> groupMap = new HashMap<String, List<Invoker<T>>>();
+            String method = entry.getKey(); // 方法
+            List<Invoker<T>> invokers = entry.getValue(); // 方法对应的invoker
+            Map<String, List<Invoker<T>>> groupMap = new HashMap<String, List<Invoker<T>>>(); // <group，List<Invoker>>
             for (Invoker<T> invoker : invokers) {
-                String group = invoker.getUrl().getParameter(Constants.GROUP_KEY, "");
+                String group = invoker.getUrl().getParameter(Constants.GROUP_KEY, ""); // 提供者端服务分组
                 List<Invoker<T>> groupInvokers = groupMap.get(group);
                 if (groupInvokers == null) {
                     groupInvokers = new ArrayList<Invoker<T>>();
@@ -286,10 +292,13 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                 groupInvokers.add(invoker);
             }
             if (groupMap.size() == 1) {
+                // 该方法的提供者，只有一个group，直接放入result
                 result.put(method, groupMap.values().iterator().next());
             } else if (groupMap.size() > 1) {
+                // 该方法的提供者，有多个服务分组
                 List<Invoker<T>> groupInvokers = new ArrayList<Invoker<T>>();
                 for (List<Invoker<T>> groupList : groupMap.values()) {
+                    // 分别将每个group对应的List<Invoker>集群为一个Invoker
                     groupInvokers.add(cluster.join(new StaticDirectory<T>(groupList)));
                 }
                 result.put(method, groupInvokers);
@@ -357,6 +366,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                         break;
                     }
                 }
+                // 不匹配的提供者url，跳到下一个
                 if (!accept) {
                     continue;
                 }
@@ -364,14 +374,29 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
             if (Constants.EMPTY_PROTOCOL.equals(providerUrl.getProtocol())) {
                 continue;
             }
+            // 判断提供者url协议是否支持
             if (!ExtensionLoader.getExtensionLoader(Protocol.class).hasExtension(providerUrl.getProtocol())) {
                 logger.error(new IllegalStateException("Unsupported protocol " + providerUrl.getProtocol() + " in notified url: " + providerUrl + " from registry " + getUrl().getAddress() + " to consumer " + NetUtils.getLocalHost()
                         + ", supported protocol: " + ExtensionLoader.getExtensionLoader(Protocol.class).getSupportedExtensions()));
                 continue;
             }
-            URL url = mergeUrl(providerUrl);
+            /**
+             * providerUrl: dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-provider
+             * &cellinvokemode=sharing&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello
+             * &pid=19394&side=provider&timestamp=1551163323145
+             *
+             * url: dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-consumer
+             * &cellinvokemode=sharing&check=false&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService
+             * &methods=sayHello&pid=19411&register.ip=172.16.113.42&remote.timestamp=1551163323145&side=consumer&timestamp=1551163440318
+             */
+            URL url = mergeUrl(providerUrl); // 合并参数到提供者url
 
-            String key = url.toFullString(); // URL参数是排序的
+            /**
+             * key: dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-consumer
+             * &cellinvokemode=sharing&check=false&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService
+             * &methods=sayHello&pid=19411&register.ip=172.16.113.42&remote.timestamp=1551163323145&side=consumer&timestamp=1551163440318
+             */
+            String key = url.toFullString(); // URL参数是排序的(这个key是配置合并之后的url字符串表示)
             if (keys.contains(key)) { // 重复URL
                 continue;
             }
@@ -381,13 +406,14 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
             Invoker<T> invoker = localUrlInvokerMap == null ? null : localUrlInvokerMap.get(key);
             if (invoker == null) { // 缓存中没有，重新refer
                 try {
-                    boolean enabled = true;
+                    boolean enabled = true; // enabled参数控制是否引用
                     if (url.hasParameter(Constants.DISABLED_KEY)) {
                         enabled = !url.getParameter(Constants.DISABLED_KEY, false);
                     } else {
                         enabled = url.getParameter(Constants.ENABLED_KEY, true);
                     }
                     if (enabled) {
+                        // serviceType: Class<com.alibaba.dubbo.demo.DemoService>
                         invoker = new InvokerDelegete<T>(protocol.refer(serviceType, url), url, providerUrl);
                     }
                 } catch (Throwable t) {
@@ -407,22 +433,22 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
     /**
      * 合并url参数 顺序为override > -D >Consumer > Provider
      *
-     * @param providerUrl
+     * @param providerUrl 提供者url dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-provider&cellinvokemode=sharing&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello&pid=19394&side=provider&timestamp=15511633231
      * @param overrides
      * @return
      */
     private URL mergeUrl(URL providerUrl) {
-        providerUrl = ClusterUtils.mergeUrl(providerUrl, queryMap); // 合并消费端参数
+        providerUrl = ClusterUtils.mergeUrl(providerUrl, queryMap); // 合并消费端参数(包含了-D参数)到提供者url
 
         List<Configurator> localConfigurators = this.configurators; // local reference
         if (localConfigurators != null && localConfigurators.size() > 0) {
             for (Configurator configurator : localConfigurators) {
-                providerUrl = configurator.configure(providerUrl);
+                providerUrl = configurator.configure(providerUrl); // override数据配置到提供者url
             }
         }
 
         providerUrl = providerUrl.addParameter(Constants.CHECK_KEY, String.valueOf(false)); // 不检查连接是否成功，总是创建Invoker！
-
+        // providerUrl----dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-consumer&cellinvokemode=sharing&check=false&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello&pid=19411&register.ip=172.16.113.42&remote.timestamp=1551163323145&side=consumer&timestamp=1551163440318
         //directoryUrl 与 override 合并是在notify的最后，这里不能够处理
         this.overrideDirectoryUrl = this.overrideDirectoryUrl.addParametersIfAbsent(providerUrl.getParameters()); // 合并提供者参数        
 
@@ -445,6 +471,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         return providerUrl;
     }
 
+    // TODO 待看
     private List<Invoker<T>> route(List<Invoker<T>> invokers, String method) {
         Invocation invocation = new RpcInvocation(method, new Class<?>[0], new Object[0]);
         List<Router> routers = getRouters();
@@ -469,14 +496,14 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         // 按提供者URL所声明的methods分类，兼容注册中心执行路由过滤掉的methods
         List<Invoker<T>> invokersList = new ArrayList<Invoker<T>>();
         if (invokersMap != null && invokersMap.size() > 0) {
-            for (Invoker<T> invoker : invokersMap.values()) {
+            for (Invoker<T> invoker : invokersMap.values()) { // 遍历最新的invoker列表
                 String parameter = invoker.getUrl().getParameter(Constants.METHODS_KEY);
                 if (parameter != null && parameter.length() > 0) {
                     String[] methods = Constants.COMMA_SPLIT_PATTERN.split(parameter);
                     if (methods != null && methods.length > 0) {
                         for (String method : methods) {
                             if (method != null && method.length() > 0
-                                    && !Constants.ANY_VALUE.equals(method)) {
+                                    && !Constants.ANY_VALUE.equals(method)) { // method != *
                                 List<Invoker<T>> methodInvokers = newMethodInvokerMap.get(method);
                                 if (methodInvokers == null) {
                                     methodInvokers = new ArrayList<Invoker<T>>();
@@ -490,6 +517,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                 invokersList.add(invoker);
             }
         }
+        // 路由
         List<Invoker<T>> newInvokersList = route(invokersList, null);
         newMethodInvokerMap.put(Constants.ANY_VALUE, newInvokersList);
         if (serviceMethods != null && serviceMethods.length > 0) {
@@ -504,7 +532,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         // sort and unmodifiable
         for (String method : new HashSet<String>(newMethodInvokerMap.keySet())) {
             List<Invoker<T>> methodInvokers = newMethodInvokerMap.get(method);
-            Collections.sort(methodInvokers, InvokerComparator.getComparator());
+            Collections.sort(methodInvokers, InvokerComparator.getComparator()); // 比较invoker url字符串排序
             newMethodInvokerMap.put(method, Collections.unmodifiableList(methodInvokers));
         }
         return Collections.unmodifiableMap(newMethodInvokerMap);
@@ -572,20 +600,22 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    // 根据方法，列出符合的invoker
     public List<Invoker<T>> doList(Invocation invocation) {
         if (forbidden) {
             // 1. 没有服务提供者 2. 服务提供者被禁用
             throw new RpcException(RpcException.FORBIDDEN_EXCEPTION,
-                "No provider available from registry " + getUrl().getAddress() + " for service " + getConsumerUrl().getServiceKey() + " on consumer " +  NetUtils.getLocalHost()
-                    + " use dubbo version " + Version.getVersion() + ", may be providers disabled or not registered ?");
+                "No provider available from registry " + getUrl().getAddress() + " for service "
+                        + getConsumerUrl().getServiceKey() + " on consumer " +  NetUtils.getLocalHost()
+                        + " use dubbo version " + Version.getVersion() + ", may be providers disabled or not registered ?");
         }
         List<Invoker<T>> invokers = null;
         Map<String, List<Invoker<T>>> localMethodInvokerMap = this.methodInvokerMap; // local reference
         if (localMethodInvokerMap != null && localMethodInvokerMap.size() > 0) {
-            String methodName = RpcUtils.getMethodName(invocation);
-            Object[] args = RpcUtils.getArguments(invocation);
+            String methodName = RpcUtils.getMethodName(invocation); // 方法名
+            Object[] args = RpcUtils.getArguments(invocation); // 方法参数
             if (args != null && args.length > 0 && args[0] != null
-                    && (args[0] instanceof String || args[0].getClass().isEnum())) {
+                    && (args[0] instanceof String || args[0].getClass().isEnum())) { // 第一个参数是字符串或枚举
                 invokers = localMethodInvokerMap.get(methodName + "." + args[0]); // 可根据第一个参数枚举路由
             }
             if (invokers == null) {
@@ -618,7 +648,8 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
         Map<String, Invoker<T>> localUrlInvokerMap = urlInvokerMap;
         if (localUrlInvokerMap != null && localUrlInvokerMap.size() > 0) {
-            for (Invoker<T> invoker : new ArrayList<Invoker<T>>(localUrlInvokerMap.values())) {
+            for (Invoker<T> invoker : new ArrayList<Invoker<T>>(localUrlInvokerMap.values())) { // 拷贝引用
+                // 只要有一个invoker可用，就true
                 if (invoker.isAvailable()) {
                     return true;
                 }
@@ -667,6 +698,16 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
     private static class InvokerDelegete<T> extends InvokerWrapper<T> {
         private URL providerUrl;
 
+        /**
+         *
+         * @param invoker
+         * @param url dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-consumer
+         *            &cellinvokemode=sharing&check=false&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService
+         *            &methods=sayHello&pid=19411&register.ip=172.16.113.42&remote.timestamp=1551163323145&side=consumer&timestamp=1551163440318
+         * @param providerUrl dubbo://172.16.113.42:20881/com.alibaba.dubbo.demo.DemoService?anyhost=true&application=demo-provider
+         *                      &cellinvokemode=sharing&dubbo=2.0.0&generic=false&interface=com.alibaba.dubbo.demo.DemoService&methods=sayHello
+         *                      &pid=19394&side=provider&timestamp=1551163323145
+         */
         public InvokerDelegete(Invoker<T> invoker, URL url, URL providerUrl) {
             super(invoker, url);
             this.providerUrl = providerUrl;

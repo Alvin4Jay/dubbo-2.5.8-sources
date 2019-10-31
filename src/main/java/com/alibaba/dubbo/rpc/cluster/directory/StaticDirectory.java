@@ -61,6 +61,7 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         }
         for (Invoker<T> invoker : invokers) {
             if (invoker.isAvailable()) {
+                // 只要有一个可用就返回true
                 return true;
             }
         }

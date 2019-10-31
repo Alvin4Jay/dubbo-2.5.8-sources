@@ -287,7 +287,7 @@ public class DubboProtocol extends AbstractProtocol {
     }
 
     public <T> Invoker<T> refer(Class<T> serviceType, URL url) throws RpcException {
-        // create rpc invoker.
+        // create rpc invoker. // TODO 待看
         DubboInvoker<T> invoker = new DubboInvoker<T>(serviceType, url, getClients(url), invokers);
         invokers.add(invoker);
         return invoker;
